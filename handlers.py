@@ -10,12 +10,14 @@ from states import Gen
 import utils
 import keyboards
 import text
+import db
 
 router = Router()
 
 
 @router.message(Command("start"))
 async def start_handler(msg: Message):
+    await db.add_user(msg.from_user.id)
     await msg.answer(text.greet.format(name=msg.from_user.full_name), reply_markup=keyboards.menu)
 
 
@@ -35,7 +37,8 @@ async def menu_handler(msg: Message):
 
 @router.message(Command("my_balance"))
 async def my_balance_handler(msg: Message):
-    await msg.answer("Sorry, i cant do this yet.")
+    cur_balance = await db.get_balance(msg.from_user.id)
+    await msg.answer("Your current balance is: {} tokens".format(cur_balance))
 
 
 @router.message(F.text == "◀️ Back to menu")
@@ -50,11 +53,15 @@ async def input_text_prompt(clbck: CallbackQuery, state: FSMContext):
 @router.message(Gen.text_prompt)
 @flags.chat_action("typing")
 async def generate_text(msg: Message, state: FSMContext):
+    check = await db.check_balance(msg.from_user.id)
+    if not check:
+        return await msg.answer(text.balance_error, reply_markup=keyboards.iexit_kb)
     prompt = text.prompt_chat + msg.text
     res = await utils.generate_text(prompt)
     if not res:
         return await msg.answer(text.gen_error, reply_markup=keyboards.iexit_kb)
     await msg.answer(res[0], disable_web_page_preview=True, reply_markup=keyboards.exit_kb)
+    await db.update_balance(msg.from_user.id, res[1])
 
 
 @router.callback_query(F.data == "table_menu")
