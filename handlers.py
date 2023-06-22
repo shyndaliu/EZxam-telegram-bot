@@ -56,10 +56,12 @@ async def generate_text(msg: Message, state: FSMContext):
     check = await db.check_balance(msg.from_user.id)
     if not check:
         return await msg.answer(text.balance_error, reply_markup=keyboards.iexit_kb)
-    prompt = text.prompt_chat + msg.text
+    context = await db.get_request_response(msg.from_user.id)
+    prompt = text.prompt_chat.format(prev_request=context[0], prev_response=context[1], message=msg.text)
     res = await utils.generate_text(prompt)
     if not res:
         return await msg.answer(text.gen_error, reply_markup=keyboards.iexit_kb)
+    await db.update_request_response(msg.from_user.id, msg.text, res[0])
     await msg.answer(res[0], disable_web_page_preview=True, reply_markup=keyboards.exit_kb)
     await db.update_balance(msg.from_user.id, res[1])
 
