@@ -38,6 +38,11 @@ async def update_request_response(user_id, new_request, new_response):
         )
 
 
+async def get_tables(user_id):
+    user = await db["users"].find_one({"_id": user_id})
+    return user["tables"]
+
+
 async def check_balance(user_id):
     user = await db["users"].find_one({"_id": user_id})
     return user["balance"] < 50000

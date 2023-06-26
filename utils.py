@@ -2,6 +2,8 @@ import openai
 import logging
 import config
 
+import text
+
 openai.api_key = config.OPENAI_TOKEN
 
 

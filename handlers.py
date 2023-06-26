@@ -6,6 +6,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types.callback_query import CallbackQuery
 
 from states import Gen
+from states import GetInfo
+
 
 import utils
 import keyboards
@@ -22,16 +24,19 @@ async def start_handler(msg: Message):
 
 
 @router.callback_query(F.data == "help")
-async def help_handler(clbck: CallbackQuery):
+async def help_handler(clbck: CallbackQuery, state: FSMContext):
+    await state.clear()
     await clbck.message.answer(text.help_list)
 
 @router.message(Command("help"))
-async def help_handler2(msg: Message):
+async def help_handler2(msg: Message, state: FSMContext):
+    await state.clear()
     await msg.answer(text.help_list)
 
 
 @router.message(Command("menu"))
-async def menu_handler(msg: Message):
+async def menu_handler(msg: Message, state: FSMContext):
+    await state.clear()
     await msg.answer(text.menu, reply_markup=keyboards.menu)
 
 
@@ -42,9 +47,12 @@ async def my_balance_handler(msg: Message):
 
 
 @router.message(F.text == "◀️ Back to menu")
-async def menu(msg: Message):
+async def menu(msg: Message, state:FSMContext):
+    await state.clear()
     await msg.answer(text.menu, reply_markup=keyboards.menu)
 
+
+#CHAT FUNCTIONS - TEXT GENERATION
 @router.callback_query(F.data == "generate_text")
 async def input_text_prompt(clbck: CallbackQuery, state: FSMContext):
     await state.set_state(Gen.text_prompt)
@@ -55,17 +63,74 @@ async def input_text_prompt(clbck: CallbackQuery, state: FSMContext):
 async def generate_text(msg: Message, state: FSMContext):
     check = await db.check_balance(msg.from_user.id)
     if not check:
-        return await msg.answer(text.balance_error, reply_markup=keyboards.iexit_kb)
+        state.finish()
+        return await msg.answer(text.balance_error, reply_markup=keyboards.exit_kb)
     context = await db.get_request_response(msg.from_user.id)
     prompt = text.prompt_chat.format(prev_request=context[0], prev_response=context[1], message=msg.text)
     res = await utils.generate_text(prompt)
     if not res:
-        return await msg.answer(text.gen_error, reply_markup=keyboards.iexit_kb)
+        state.finish()
+        return await msg.answer(text.gen_error, reply_markup=keyboards.exit_kb)
     await db.update_request_response(msg.from_user.id, msg.text, res[0])
     await msg.answer(res[0], disable_web_page_preview=True, reply_markup=keyboards.exit_kb)
     await db.update_balance(msg.from_user.id, res[1])
 
 
+#TABLE GENERATION
+
 @router.callback_query(F.data == "table_menu")
-async def input_image_prompt(clbck: CallbackQuery):
-    await clbck.message.answer("Sorry, i can't do this yet")
+async def table_menu(clbck: CallbackQuery):
+    await clbck.message.answer(
+        "Welcome to tables menu, here you can see your tables and create new one", 
+        reply_markup=keyboards.table_menu)
+
+@router.callback_query(F.data == "get_tables")
+async def my_tables(clbck: CallbackQuery):
+    tables = await db.get_tables(clbck.from_user.id)
+    if len(tables)==0:
+        return await clbck.message.answer("You don't have any table yet", 
+        reply_markup=keyboards.exit_kb)
+    await clbck.message.answer("*here could be your tables", 
+        reply_markup=keyboards.exit_kb)
+    
+
+@router.callback_query(F.data == "generate_table")
+async def input_table_first(clbck: CallbackQuery, state: FSMContext):
+    await state.set_state(GetInfo.get_deadline)
+    await clbck.message.answer(text.table_text, reply_markup=keyboards.exit_kb)
+    await clbck.message.answer("Enter the date [DD.MM.YY HH:MM] of the <em>day X</em>\nex. 05.03", reply_markup=keyboards.exit_kb)
+
+@router.message(GetInfo.get_deadline)
+@flags.chat_action("typing")
+async def input_table_deadline(msg: Message, state: FSMContext):
+    check_date = await utils.generate_text(text.check_date_prompt.format(input = msg.text))
+    check_date = check_date[0]
+
+    if check_date[0:2]!="OK":
+        await state.clear()
+        return await msg.answer("Invalid data", reply_markup=keyboards.exit_kb)
+
+    await msg.answer(f"You've entered this date: {check_date[3:]}")
+    await state.update_data(deadline = check_date[3:])
+
+    await msg.answer(text.get_topics, 
+    reply_markup=keyboards.exit_kb)
+    await state.set_state(GetInfo.get_topics)
+
+@router.message(GetInfo.get_topics)
+@flags.chat_action("typing")
+async def input_table_deadline(msg: Message, state: FSMContext):
+    check_topics = await utils.generate_text(text.check_topics_prompt.format(input = msg.text))
+    check_topics = check_topics[0]
+
+    if "error" in check_topics.lower():
+        await state.clear()
+        return await msg.answer("Invalid data", reply_markup=keyboards.exit_kb)
+
+    await msg.answer(f"You've entered these topics: " + check_topics)   
+    topics_list = check_topics.split(",")
+    await state.update_data(topics = topics_list)
+
+    await msg.answer(text.rate_topics, 
+    reply_markup=keyboards.rating_menu)
+    await state.set_state(GetInfo.rate_topics)

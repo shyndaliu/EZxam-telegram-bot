@@ -6,4 +6,21 @@ menu = [
 ]
 menu = InlineKeyboardMarkup(inline_keyboard=menu)
 exit_kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="◀️ Back to menu")]], resize_keyboard=True)
-iexit_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Выйти в меню", callback_data="menu")]])
+
+table_menu = [
+    [InlineKeyboardButton(text="📋 My tables", callback_data="get_tables"),
+     InlineKeyboardButton(text="📆 Create new table", callback_data="generate_table")],
+    [InlineKeyboardButton(text="🔎 Help", callback_data="help")]
+]
+table_menu = InlineKeyboardMarkup(inline_keyboard=table_menu)
+
+enter_deadline = [
+    [InlineKeyboardButton(text="Enter again", callback_data="enter_deadline")]
+]
+enter_deadline = InlineKeyboardMarkup(inline_keyboard=enter_deadline)
+
+rating_menu = [
+    [InlineKeyboardButton(text="⭐️ Start rating", callback_data="help"),
+     InlineKeyboardButton(text="➡️ Skip", callback_data="help")]
+]
+rating_menu = InlineKeyboardMarkup(inline_keyboard=rating_menu)
