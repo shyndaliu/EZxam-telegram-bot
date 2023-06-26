@@ -10,7 +10,7 @@ Reply in a context of a previous message from user: "{prev_request}" and previou
 "{message}"
 Do not justify your answer. Answer like Cal Newport would answer. You can joke if it is off-topic."""
 
-check_date_prompt = 'Can you turn this: "{input}" into a date in format of "DD.MM.YY HH:MM"? (If year is not given replace it with 2023, if time is not given replace it with 00:00) If yes return "OK. " + date, otherwise return "Error". Do not justify your answer.'
+check_date_prompt = 'Can you turn this: "{input}" into a date in format of "DD.MM.YY HH:MM"? (If year is not given replace it with {year}, if time is not given replace it with 00:00) If yes return "OK. " + date, otherwise return "Error". Do not justify your answer.'
 
 check_topics_prompt = 'I want you to act as a data corrector. I will give you a list of topics, you must determine if there are real topics from textbooks, if not return "Error". After that you must separate all topics with a comma. You may be given only first and last topics, in this case autocomplete all topics in between by yourself. Know process this input: "{input}". Do not justify your answer.'
 

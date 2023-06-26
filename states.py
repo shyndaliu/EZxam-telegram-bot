@@ -9,3 +9,4 @@ class GetInfo(StatesGroup):
     get_deadline = State()
     get_topics = State()
     rate_topics = State()
+    get_calendar = State()
