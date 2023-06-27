@@ -20,7 +20,6 @@ enter_deadline = [
 enter_deadline = InlineKeyboardMarkup(inline_keyboard=enter_deadline)
 
 rating_menu = [
-    [InlineKeyboardButton(text="⭐️ Start rating", callback_data="help"),
-     InlineKeyboardButton(text="➡️ Skip", callback_data="skip_rating")]
+    [InlineKeyboardButton(text="➡️ Skip", callback_data="skip_rating")]
 ]
 rating_menu = InlineKeyboardMarkup(inline_keyboard=rating_menu)

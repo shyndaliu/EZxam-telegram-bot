@@ -19,3 +19,17 @@ async def generate_text(prompt) -> dict:
         return response['choices'][0]['message']['content'], response['usage']['total_tokens']
     except Exception as e:
         logging.error(e)
+
+
+async def check_smth(prompt) -> dict:
+    try:
+        response = await openai.ChatCompletion.acreate(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            temperature=1
+        )
+        return response['choices'][0]['message']['content'], response['usage']['total_tokens']
+    except Exception as e:
+        logging.error(e)

@@ -9,6 +9,7 @@ from states import Gen
 from states import GetInfo
 
 from datetime import timedelta, date, datetime
+import re
 
 import utils
 import keyboards
@@ -59,19 +60,23 @@ async def input_text_prompt(clbck: CallbackQuery, state: FSMContext):
     await state.set_state(Gen.text_prompt)
     await clbck.message.answer(text.gen_text, reply_markup=keyboards.exit_kb)
 
+
 @router.message(Gen.text_prompt)
 @flags.chat_action("typing")
 async def generate_text(msg: Message, state: FSMContext):
     check = await db.check_balance(msg.from_user.id)
     if not check:
-        state.finish()
+        state.clear()
         return await msg.answer(text.balance_error, reply_markup=keyboards.exit_kb)
+
     context = await db.get_request_response(msg.from_user.id)
     prompt = text.prompt_chat.format(prev_request=context[0], prev_response=context[1], message=msg.text)
+
     res = await utils.generate_text(prompt)
     if not res:
-        state.finish()
+        state.clear()
         return await msg.answer(text.gen_error, reply_markup=keyboards.exit_kb)
+
     await db.update_request_response(msg.from_user.id, msg.text, res[0])
     await msg.answer(res[0], disable_web_page_preview=True, reply_markup=keyboards.exit_kb)
     await db.update_balance(msg.from_user.id, res[1])
@@ -105,7 +110,17 @@ async def input_table_first(clbck: CallbackQuery, state: FSMContext):
 @router.message(GetInfo.get_deadline)
 @flags.chat_action("typing")
 async def input_table_deadline(msg: Message, state: FSMContext):
-    check_date = await utils.generate_text(text.check_date_prompt.format(input=msg.text, year=date.today().year))
+    check = await db.check_balance(msg.from_user.id)
+    if not check:
+        state.clear()
+        return await msg.answer(text.balance_error, reply_markup=keyboards.exit_kb)
+    
+    check_date = await utils.check_smth(text.check_date_prompt.format(input=msg.text, year=date.today().year))
+    if not check_date:
+        return await msg.answer(text.err, 
+                                reply_markup=keyboards.exit_kb)
+
+    await db.update_balance(msg.from_user.id, check_date[1])
     check_date = check_date[0]
 
     if check_date[0:2] != "OK":
@@ -130,19 +145,34 @@ async def input_table_deadline(msg: Message, state: FSMContext):
                      reply_markup=keyboards.exit_kb)
     await state.set_state(GetInfo.get_topics)
 
+
 @router.message(GetInfo.get_topics)
 @flags.chat_action("typing")
-async def input_table_deadline(msg: Message, state: FSMContext):
-    check_topics = await utils.generate_text(text.check_topics_prompt.format(input=msg.text))
+async def input_table_topics(msg: Message, state: FSMContext):
+    check = await db.check_balance(msg.from_user.id)
+    if not check:
+        state.clear()
+        return await msg.answer(text.balance_error, reply_markup=keyboards.exit_kb)
+
+    check_topics = await utils.check_smth(text.check_topics_prompt.format(input=msg.text))
+    if not check_topics:
+        return await msg.answer(text.err, 
+                                reply_markup=keyboards.exit_kb)
+
+    await db.update_balance(msg.from_user.id, check_topics[1])
     check_topics = check_topics[0]
 
     if "error" in check_topics.lower():
         return await msg.answer("Something went wrong, try again", 
                                 reply_markup=keyboards.exit_kb)
 
-    await msg.answer(f"You've entered these topics: " + check_topics)   
+    await msg.answer(f"You've entered these topics: " + check_topics)  
+
     topics_list = check_topics.split(",")
-    await state.update_data(topics=topics_list)
+    topics_and_levels = {}
+    for topic in topics_list:
+        topics_and_levels[topic.strip()] = 3
+    await state.update_data(topics=topics_and_levels)
 
     await msg.answer(text.rate_topics, 
                      reply_markup=keyboards.rating_menu)
@@ -155,3 +185,18 @@ async def input_table_skip_rating(clbck: CallbackQuery, state: FSMContext):
     await clbck.message.answer("You have skipped the rating, related info is set to default")
     await state.set_state(GetInfo.get_calendar)
     await clbck.message.answer("calendar timee!")
+
+@router.message(GetInfo.rate_topics)
+@flags.chat_action("typing")
+async def input_table_rate_topics(msg: Message, state: FSMContext):
+    topics_dict = (await state.get_data())['topics']
+    topics = list(topics_dict.keys())
+    grades = re.findall(r"\d", msg.text)
+    
+    for i in range(min(len(grades), len(topics))):
+        topics_dict[topics[i]]=min(int(grades[i]), 5)
+        topics_dict[topics[i]]=max(topics_dict[topics[i]], 1)
+
+    await state.update_data(topics=topics_dict)
+    await state.set_state(GetInfo.get_calendar)
+    await msg.answer("calendar timee!")
