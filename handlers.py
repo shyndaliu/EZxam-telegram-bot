@@ -7,14 +7,17 @@ from aiogram.types.callback_query import CallbackQuery
 
 from states import Gen
 from states import GetInfo
+from states import GenTable
 
 from datetime import timedelta, date, datetime
 import re
+import json
 
 import utils
 import keyboards
 import text
 import db
+from keyboards import booking_button_callback 
 
 router = Router()
 
@@ -179,12 +182,18 @@ async def input_table_topics(msg: Message, state: FSMContext):
     await state.set_state(GetInfo.rate_topics)
 
 
+
 @router.callback_query(F.data == "skip_rating", GetInfo.rate_topics)
 @flags.chat_action("typing")
 async def input_table_skip_rating(clbck: CallbackQuery, state: FSMContext):
     await clbck.message.answer("You have skipped the rating, related info is set to default")
     await state.set_state(GetInfo.get_calendar)
-    await clbck.message.answer("calendar timee!")
+
+    calendar_blank = await utils.calendar_template((await state.get_data())['deadline'])
+    print(calendar_blank)
+    await state.update_data(calendar=calendar_blank)
+    await state.update_data(cur_date=0)
+    await clbck.message.answer(text.calendar_text, reply_markup=keyboards.calendar_start_menu)
 
 @router.message(GetInfo.rate_topics)
 @flags.chat_action("typing")
@@ -192,11 +201,131 @@ async def input_table_rate_topics(msg: Message, state: FSMContext):
     topics_dict = (await state.get_data())['topics']
     topics = list(topics_dict.keys())
     grades = re.findall(r"\d", msg.text)
-    
+
     for i in range(min(len(grades), len(topics))):
         topics_dict[topics[i]]=min(int(grades[i]), 5)
         topics_dict[topics[i]]=max(topics_dict[topics[i]], 1)
 
     await state.update_data(topics=topics_dict)
     await state.set_state(GetInfo.get_calendar)
-    await msg.answer("calendar timee!")
+
+    calendar_blank = await utils.calendar_template(
+        (await state.get_data())['deadline']
+        )
+    await state.update_data(calendar=calendar_blank)
+    await state.update_data(cur_date=0)   
+    await msg.answer(text.calendar_text, reply_markup=keyboards.calendar_start_menu)
+
+
+@router.callback_query(F.data == "skip_booking", GetInfo.get_calendar)
+@flags.chat_action("typing")
+async def input_table_skip_booking(clbck: CallbackQuery, state: FSMContext):
+    await clbck.message.answer("You have skipped the rating, related info is set to default")
+
+    calendar = (await state.get_data())['calendar']
+    for date in calendar:
+        date.pop("00-01", None)
+        date.pop("01-02", None)
+        date.pop("02-03", None)
+        date.pop("03-04", None)
+        date.pop("04-05", None)
+        date.pop("05-06", None)
+        date.pop("23-00", None)
+    await state.update_data(calendar=calendar)      
+
+    await state.set_state(GetInfo.final)
+    await clbck.message.answer(text.final_text, reply_markup=keyboards.finish_button)
+
+
+@router.callback_query(booking_button_callback.filter(), GetInfo.get_calendar)
+async def button_handler(clbck: CallbackQuery, callback_data: booking_button_callback, state: FSMContext):
+    print(callback_data)
+    action = callback_data.action
+    date = callback_data.date
+    hour = callback_data.hour
+
+    if action==2:
+        cur_date = int((await state.get_data())['cur_date'])
+        await state.update_data(cur_date=cur_date+1) 
+    elif action==1:   
+        calendar = (await state.get_data())['calendar']
+        dates = list(calendar.keys())
+        calendar[dates[date]][hour] = not calendar[dates[date]][hour]
+        await state.update_data(calendar=calendar)
+    calendar = (await state.get_data())['calendar']
+    dates = list(calendar.keys())
+    cur_date = int((await state.get_data())['cur_date'])
+    if cur_date==len(dates):
+        await state.set_state(GetInfo.final)
+        return await clbck.message.answer(text.final_text, reply_markup=keyboards.finish_button)
+    await clbck.message.edit_text(text.calendar_booking.format(date=dates[cur_date]))
+    await clbck.message.edit_reply_markup(reply_markup=(await keyboards.calendar_kb(calendar[dates[cur_date]], cur_date)))
+
+@router.callback_query(GetInfo.final, F.data == "to_db")
+async def finish_form(clbck: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    topics = data["topics"]
+    calendar = data["calendar"]
+    print(topics, calendar)
+    free_time = await utils.cal_for_prompt(calendar)
+    await state.update_data(free_time=free_time)
+    print(free_time)
+    await db.create_table(clbck.from_user.id, topics, free_time)
+    await state.set_state(GenTable.gen_tasks)
+
+#GENERATINNNG TABLEEEEEE
+@router.callback_query(GenTable.gen_tasks)
+async def gen_tasks(clbck: CallbackQuery, state: FSMContext):
+    await clbck.message.edit_text("<em>📚 creating study plan...</em>")
+    await clbck.message.edit_reply_markup(reply_markup=None)
+    topics = int((await state.get_data())['topics'])
+    res = await utils.generate_text(prompt=text.gen_tasks_prompt.format(topics=json.dumps(topics)))
+    if not res:
+        return
+    await db.update_balance(msg.from_user.id, res[1])
+    await state.update_data(tasks=res[0])
+    print(res[0])
+    await state.set_state(GenTable.gen_timing)
+
+@router.callback_query(GenTable.gen_timing)
+async def gen_tasks(clbck: CallbackQuery, state: FSMContext):
+    await clbck.message.edit_text("<em>⏳ evaluating your time...</em>")
+    await clbck.message.edit_reply_markup(reply_markup=None)
+    tasks = int((await state.get_data())['tasks'])
+    res = await utils.generate_text(prompt=text.gen_timing_prompt.format(tasks))
+    if not res:
+        return
+    await db.update_balance(msg.from_user.id, res[1])
+    await state.update_data(timing=res[0])
+    print(res[0])
+    await state.set_state(GenTable.gen_adj)
+
+@router.callback_query(GenTable.gen_adj)
+async def gen_tasks(clbck: CallbackQuery, state: FSMContext):
+    await clbck.message.edit_text("<em>📆 adjusting to your schedule...</em>")
+    await clbck.message.edit_reply_markup(reply_markup=None)
+    timing = (await state.get_data())['timing']
+    free_time = ((await state.get_data())['free_time'])
+    total_time = await utils.count_time(free_time)
+    res = await utils.generate_text(prompt=text.gen_adj_prompt.format(timing, total_time))
+    if not res:
+        return
+    await db.update_balance(msg.from_user.id, res[1])
+    await state.update_data(timing_adj=res[0])
+    print(res[0])
+    await state.set_state(GenTable.gen_table)
+
+@router.callback_query(GenTable.gen_table)
+async def gen_tasks(clbck: CallbackQuery, state: FSMContext):
+    await clbck.message.edit_text("<em>🙌 final steps...</em>")
+    await clbck.message.edit_reply_markup(reply_markup=None)
+    free_time = (await state.get_data())['free_time']
+    timing = (await state.get_data())['timing_adj']
+    tasks = (await state.get_data())['tasks']
+    res = await utils.generate_text(prompt=text.gen_table_prompt.format(json.dumps(free_time), timing, tasks))
+    if not res:
+        return
+    await db.update_balance(msg.from_user.id, res[1])
+    await state.update_data(table=res[0])
+    print(res[0])
+    await state.clear()

@@ -64,3 +64,20 @@ async def update_balance(user_id, tokens_cnt):
                 }
             },
         )
+
+async def create_table(user_id, topics, free_time):
+    payload = {
+        "user": user_id,
+        "topics": topics,
+        "calendar": free_time,
+        "table": {}
+    }
+    data = await db["tables"].insert_one(payload)
+    db["users"].update_one(
+            filter={"_id": user_id},
+            update={
+                "$push": {
+                    "tables": str(data.inserted_id)
+                }
+            },
+        )
