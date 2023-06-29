@@ -50,7 +50,7 @@ async def calendar_kb(cur_date, date):
     markup = []
     for hours in cur_date:
         row=[]
-        row.append(InlineKeyboardButton(text=str(hours), callback_data="help"))
+        row.append(InlineKeyboardButton(text=str(hours), callback_data=new_cb(action=0)))
         if cur_date[hours]:
             row.append(InlineKeyboardButton(text="✅", callback_data=new_cb(date=date, hour=str(hours))))
         else:
