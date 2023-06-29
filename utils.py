@@ -90,9 +90,15 @@ async def cal_for_prompt(calendar):
 async def count_time(calendar):
     answer = 0
     for date in calendar:
-        for timespan in date:
+        for timespan in calendar[date]:
             borders = re.findall(r"[0-9AMP]+", timespan)
-            last = datetime.strptime(borders[1], '%-I%p')
-            first = datetime.strptime(borders[0], '%-I%p')
-            answer += int(last.timestamp() - first.timestamp()) // 60
+            last = int(borders[1][:-2])
+            first = int(borders[0][:-2])
+            hours = last - first
+            if hours==0:
+                hours+=24
+            if borders[0].endswith("AM") != borders[1].endswith("AM"):
+                hours+=12
+            answer += hours*60
     return answer
+

@@ -12,6 +12,7 @@ from states import GenTable
 from datetime import timedelta, date, datetime
 import re
 import json
+import time
 
 import utils
 import keyboards
@@ -224,13 +225,13 @@ async def input_table_skip_booking(clbck: CallbackQuery, state: FSMContext):
 
     calendar = (await state.get_data())['calendar']
     for date in calendar:
-        date.pop("00-01", None)
-        date.pop("01-02", None)
-        date.pop("02-03", None)
-        date.pop("03-04", None)
-        date.pop("04-05", None)
-        date.pop("05-06", None)
-        date.pop("23-00", None)
+        date.pop("12PM-1AM", None)
+        date.pop("1AM-2AM", None)
+        date.pop("2AM-3AM", None)
+        date.pop("3AM-4AM", None)
+        date.pop("4AM-5AM", None)
+        date.pop("5AM-6AM", None)
+        date.pop("11PM-12PM", None)
     await state.update_data(calendar=calendar)      
 
     await state.set_state(GetInfo.final)
@@ -256,76 +257,72 @@ async def button_handler(clbck: CallbackQuery, callback_data: booking_button_cal
     dates = list(calendar.keys())
     cur_date = int((await state.get_data())['cur_date'])
     if cur_date==len(dates):
-        await state.set_state(GetInfo.final)
+        await state.set_state(GenTable.gen_tasks)
         return await clbck.message.answer(text.final_text, reply_markup=keyboards.finish_button)
-    await clbck.message.edit_text(text.calendar_booking.format(date=dates[cur_date]))
-    await clbck.message.edit_reply_markup(reply_markup=(await keyboards.calendar_kb(calendar[dates[cur_date]], cur_date)))
+    await clbck.message.edit_text(text.calendar_booking.format(date=dates[cur_date]), 
+                                  reply_markup=(await keyboards.calendar_kb(calendar[dates[cur_date]], cur_date)))
 
-@router.callback_query(GetInfo.final, F.data == "to_db")
+@router.callback_query(GenTable.gen_tasks, F.data == "final")
 async def finish_form(clbck: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     topics = data["topics"]
     calendar = data["calendar"]
-    print(topics, calendar)
     free_time = await utils.cal_for_prompt(calendar)
     await state.update_data(free_time=free_time)
-    print(free_time)
-    await db.create_table(clbck.from_user.id, topics, free_time)
-    await state.set_state(GenTable.gen_tasks)
+    table_id = await db.create_table(clbck.from_user.id, topics, free_time)
 
-#GENERATINNNG TABLEEEEEE
-@router.callback_query(GenTable.gen_tasks)
-async def gen_tasks(clbck: CallbackQuery, state: FSMContext):
     await clbck.message.edit_text("<em>📚 creating study plan...</em>")
-    await clbck.message.edit_reply_markup(reply_markup=None)
-    topics = int((await state.get_data())['topics'])
+
     res = await utils.generate_text(prompt=text.gen_tasks_prompt.format(topics=json.dumps(topics)))
     if not res:
-        return
-    await db.update_balance(msg.from_user.id, res[1])
+        time.sleep(60)
+        res = await utils.generate_text(prompt=text.gen_tasks_prompt.format(topics=json.dumps(topics)))
+    await db.update_balance(clbck.from_user.id, res[1])
     await state.update_data(tasks=res[0])
     print(res[0])
-    await state.set_state(GenTable.gen_timing)
 
-@router.callback_query(GenTable.gen_timing)
-async def gen_tasks(clbck: CallbackQuery, state: FSMContext):
     await clbck.message.edit_text("<em>⏳ evaluating your time...</em>")
-    await clbck.message.edit_reply_markup(reply_markup=None)
-    tasks = int((await state.get_data())['tasks'])
-    res = await utils.generate_text(prompt=text.gen_timing_prompt.format(tasks))
+    tasks = res[0]
+    res = await utils.generate_text(prompt=text.gen_timing_prompt.format(tasks=tasks))
     if not res:
-        return
-    await db.update_balance(msg.from_user.id, res[1])
+        time.sleep(60)
+        res = await utils.generate_text(prompt=text.gen_timing_prompt.format(tasks=tasks))
+    await db.update_balance(clbck.from_user.id, res[1])
     await state.update_data(timing=res[0])
     print(res[0])
-    await state.set_state(GenTable.gen_adj)
 
-@router.callback_query(GenTable.gen_adj)
-async def gen_tasks(clbck: CallbackQuery, state: FSMContext):
     await clbck.message.edit_text("<em>📆 adjusting to your schedule...</em>")
-    await clbck.message.edit_reply_markup(reply_markup=None)
-    timing = (await state.get_data())['timing']
-    free_time = ((await state.get_data())['free_time'])
+    timing = res[0]
     total_time = await utils.count_time(free_time)
-    res = await utils.generate_text(prompt=text.gen_adj_prompt.format(timing, total_time))
+    print(total_time)
+    res = await utils.generate_text(prompt=text.gen_adj_prompt.format(
+        timing=timing,
+        total_time=total_time))
     if not res:
-        return
-    await db.update_balance(msg.from_user.id, res[1])
+        time.sleep(60)
+        res = await utils.generate_text(prompt=text.gen_adj_prompt.format(
+        timing=timing,
+        total_time=total_time))
+    await db.update_balance(clbck.from_user.id, res[1])
     await state.update_data(timing_adj=res[0])
     print(res[0])
-    await state.set_state(GenTable.gen_table)
-
-@router.callback_query(GenTable.gen_table)
-async def gen_tasks(clbck: CallbackQuery, state: FSMContext):
+    
     await clbck.message.edit_text("<em>🙌 final steps...</em>")
-    await clbck.message.edit_reply_markup(reply_markup=None)
-    free_time = (await state.get_data())['free_time']
-    timing = (await state.get_data())['timing_adj']
-    tasks = (await state.get_data())['tasks']
-    res = await utils.generate_text(prompt=text.gen_table_prompt.format(json.dumps(free_time), timing, tasks))
+    timing = res[0]
+    res = await utils.generate_text(prompt=text.gen_table_prompt.format(
+        calendar=json.dumps(free_time),
+        timing=timing,
+        tasks=tasks))
     if not res:
-        return
-    await db.update_balance(msg.from_user.id, res[1])
+        time.sleep(60)
+        res = await utils.generate_text(prompt=text.gen_table_prompt.format(
+        calendar=json.dumps(free_time),
+        timing=timing,
+        tasks=tasks))
+    await db.update_balance(clbck.from_user.id, res[1])
     await state.update_data(table=res[0])
     print(res[0])
-    await state.clear()
+    await db.add_table(table_id, res[0])
+    await clbck.message.edit_text("<em>🙌 Done!</em>")
+    await clbck.message.answer(res[0])
+

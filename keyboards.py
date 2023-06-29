@@ -42,7 +42,7 @@ calendar_start_menu = [
 calendar_start_menu = InlineKeyboardMarkup(inline_keyboard=calendar_start_menu)
 
 finish_button = [
-    [InlineKeyboardButton(text="🚀 Let's Go", callback_data="to_db")]
+    [InlineKeyboardButton(text="🚀 Let's Go", callback_data="final")]
 ]
 finish_button = InlineKeyboardMarkup(inline_keyboard=finish_button)
 

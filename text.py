@@ -95,10 +95,10 @@ Function of several variables: ["15 min", "45 min", "60 min", "15 min"],
 }}" you must return new timetable with task in it like this:
 "{{
 23.06:
-{{4PM-4.30PM: "Quick review of basic concepts", 4.30PM-4.45PM: "Learn basic concepts first", 4.45PM-5.30PM: "Practice finding partial derivatives of simple functions", 6PM-7PM: "As you gain more confidence, move on medium problems", 7PM-7.15PM: "Test you knowledge"}
+{{4PM-4.30PM: "Quick review of basic concepts", 4.30PM-4.45PM: "Learn basic concepts first", 4.45PM-5.30PM: "Practice finding partial derivatives of simple functions", 6PM-7PM: "As you gain more confidence, move on medium problems", 7PM-7.15PM: "Test you knowledge"}}
 }}"
 (You should adapt the sample timetable according to the lists that i gave. The plan should be self-explanatory, logicaly right, don't refer to the example I gave you.). My timetable, list of time spans and list of topics are 
 "
 {calendar}
 {timing}
-{topics}" (Give me plan only)"""
+{tasks}" (Give me plan only)"""

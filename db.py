@@ -1,7 +1,8 @@
 import motor.motor_asyncio
 import config
 from datetime import datetime
-#from bson.objectid import ObjectId
+from bson import ObjectId
+import json
 
 cluster = motor.motor_asyncio.AsyncIOMotorClient(config.MONGO_URL)
 db = cluster.ezxamsbot
@@ -78,6 +79,18 @@ async def create_table(user_id, topics, free_time):
             update={
                 "$push": {
                     "tables": str(data.inserted_id)
+                }
+            },
+        )
+    return str(data.inserted_id)
+
+async def add_table(id, table_str):
+    table = json.loads(table_str)
+    db["tables"].update_one(
+            filter={"_id": ObjectId(id)},
+            update={
+                "$set": {
+                    "table": table
                 }
             },
         )
